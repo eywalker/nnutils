@@ -26,4 +26,4 @@ local trainer = nnutils.Trainer(model, criterion, mnist, nThreads)
 trainer:cuda()
 
 -- kickoff the training!
-trainer:train(600, 80)
+trainer:train(80, 600)

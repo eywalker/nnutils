@@ -4,10 +4,12 @@ local paths = require 'paths'
 
 nnutils = nnutils or {}
 
--- Template data loader class
+-- Base data loader class with essential functionalities such as
+-- MiniBatch generation and data preprocessing
 local DataLoader = torch.class('nnutils.DataLoader')
 
 function DataLoader:__init(arg)
+  arg = arg or {}
   self.trainPC = nnutils.ProcessingChain()
   self.testPC = nnutils.ProcessingChain()
   self._nBatches = torch.Tensor(1)
@@ -25,6 +27,9 @@ function DataLoader:__init(arg)
 
   -- epoch indicies
   self.epochIndicies = torch.LongTensor()
+
+  -- batches are drawn with replacement
+  self.batchWR = arg.batchWR or false
 end
 
 
@@ -88,16 +93,20 @@ end
 -- Start a new epoch, resetting the batch size
 -- and total number of batches
 function DataLoader:startEpoch(batchSize, nBatches)
-  if (randomize==nil) then randomize = true end
   batchSize = batchSize or 100
   self._batchSize[1] = batchSize
-  self._nBatches[1] = math.ceil(self:getTrainsetSize() / self:batchSize())
-  if randomize then
-    self.epochIndicies:randperm(self:getTrainsetSize())
-  end
+
+  local fullBatches = math.ceil(self:getTrainsetSize() / self:batchSize())
+  nBatches = nBatches or fullBatches
+  if not self.batchWR then nBatches = math.min(nBatches, fullBatches) end
+  self._nBatches[1] = nBatches
+  self.epochIndicies:randperm(self:getTrainsetSize())
 end
 
 function DataLoader:getMiniBatch(batchNumber)
+  if self.batchWR then
+    return self:sampleTrainset(self:batchSize())
+  end
   local start = (batchNumber - 1) * self:batchSize() + 1
   local stop = math.min((batchNumber) * self:batchSize(), self:getTrainsetSize())
   local batchIndicies = self.epochIndicies[{{start, stop}}]

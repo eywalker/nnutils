@@ -74,24 +74,24 @@ end
 
 -- initialize member properties at the beginning
 -- of a training epoch
-function Trainer:startEpoch(n, batchSize)
+function Trainer:startEpoch(n, batchSize, nBatches)
   self.epoch = n
   self.total_samples = 0
   self.loss_epoch = 0
   self.top1_epoch = 0
   self.batchNumber = 0
   self.batchSize = batchSize
-  self.dataLoader:startEpoch(batchSize)
+  self.dataLoader:startEpoch(batchSize, nBatches)
   self.nBatches = self.dataLoader:nBatches()
   self.dataTimer:reset()
   return self.nBatches
 end
 
 
-function Trainer:train(batchSize, nEpochs)
+function Trainer:train(nEpochs, batchSize, nBatches)
   nEpochs = nEpochs or 1
   for n=1,nEpochs do
-    local nBatches = self:startEpoch(n, batchSize)
+    local nBatches = self:startEpoch(n, batchSize, nBatches)
     for i=1, nBatches do
       self.pool:addjob(
         function()

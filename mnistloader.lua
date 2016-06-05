@@ -6,7 +6,7 @@ local paths = require 'paths'
 local MNISTLoader, parent = torch.class('nnutils.MNISTLoader', 'nnutils.DataLoader')
 
 function MNISTLoader:__init(arg)
-  if arg==nil then arg = {} end
+  arg = arg or {}
   parent.__init(self, arg)
   self.data_path = arg.data_path or '.' -- defaults to current directory
   if arg.onehot==nil then arg.onehot = false end
