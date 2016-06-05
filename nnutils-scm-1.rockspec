@@ -11,15 +11,15 @@ dependencies = {
 build = {
    type = "builtin",
    modules = {
-      nnutils = "init.lua",
-      ["nnutils.dataloader"] = "nnutils/dataloader.lua",
-      ["nnutils.minibatch"] = "nnutils/minibatch.lua",
-      ["nnutils.mnistloader"] = "nnutils/mnistloader.lua",
-      ["nnutils.onehot"] = "nnutils/onehot.lua",
-      ["nnutils.processingchain"] = "nnutils/processingchain.lua",
-      ["nnutils.processor"] = "nnutils/processor.lua",
-      ["nnutils.randomcrop"] = "nnutils/randomcrop.lua",
-      ["nnutils.randomflip"] = "nnutils/randomflip.lua",
-      ["nnutils.trainer"] = "nnutils/trainer.lua",
+      nnutils = "nnutils/init.lua",
+      ["nnutils.dataloader"] = "dataloader.lua",
+      ["nnutils.minibatch"] = "minibatch.lua",
+      ["nnutils.mnistloader"] = "mnistloader.lua",
+      ["nnutils.onehot"] = "onehot.lua",
+      ["nnutils.processingchain"] = "processingchain.lua",
+      ["nnutils.processor"] = "processor.lua",
+      ["nnutils.randomcrop"] = "randomcrop.lua",
+      ["nnutils.randomflip"] = "randomflip.lua",
+      ["nnutils.trainer"] = "trainer.lua",
    }
 }
