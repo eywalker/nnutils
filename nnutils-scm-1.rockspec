@@ -6,8 +6,7 @@ source = {
 description = {
    license = "MIT"
 }
-dependencies = {
-}
+dependencies = {}
 build = {
    type = "builtin",
    modules = {
@@ -19,7 +18,8 @@ build = {
       ["nnutils.processingchain"] = "processingchain.lua",
       ["nnutils.processor"] = "processor.lua",
       ["nnutils.randomcrop"] = "randomcrop.lua",
+      ["nnutils.centercrop"] = "centercrop.lua",
       ["nnutils.randomflip"] = "randomflip.lua",
-      ["nnutils.trainer"] = "trainer.lua",
+      ["nnutils.trainer"] = "trainer.lua"
    }
 }
