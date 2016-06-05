@@ -72,6 +72,8 @@ function Trainer:float()
   self.labels = nil
 end
 
+-- initialize member properties at the beginning
+-- of a training epoch
 function Trainer:startEpoch(n, batchSize)
   self.epoch = n
   self.total_samples = 0
@@ -103,8 +105,9 @@ function Trainer:train(batchSize, nEpochs)
     self.pool:synchronize()
     if self.is_cuda then cutorch.synchronize() end
 
-
     self:saveModel()
+
+    -- test
   end
 end
 
