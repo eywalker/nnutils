@@ -1,5 +1,4 @@
 require 'torch'
-require 'nn'
 require 'optim'
 local threads = require 'threads'
 
@@ -10,11 +9,15 @@ nnutils = nnutils or {}
 local Trainer = torch.class('nnutils.Trainer')
 
 function Trainer:__init(model, criterion, dataLoader, nMinions)
+  self.dataLoader = dataLoader
+  self.nMinions = nMinions or 10
+  self:setupPool()
+
   self.model = model
   self.parameters = nil
   self.gradParameters = nil
   self.criterion = criterion
-  self.dataLoader = dataLoader
+
   self.optimState = {
     learningRate = 0.01,
     learningRateDecay = 0.0,
@@ -22,12 +25,12 @@ function Trainer:__init(model, criterion, dataLoader, nMinions)
     dampening = 0.0,
     weightDecay = 0.0
   }
-  self.nMinions = nMinions or 10
 
   -- initialize to float
   self:float()
 
-  self:setupPool()
+  self.dataTimer = torch.Timer() -- measure time to load data
+  self.timer = torch.Timer() -- measure time to complete minibatch
 end
 
 function Trainer:setupPool()
@@ -56,6 +59,8 @@ function Trainer:cuda()
   self.criterion:cuda()
   self:getParameters()
   self.is_cuda = true
+  self.data = torch.CudaTensor()
+  self.labels = torch.CudaTensor()
 end
 
 function Trainer:float()
@@ -63,29 +68,29 @@ function Trainer:float()
   self.criterion:float()
   self:getParameters()
   self.is_cuda = false
+  self.data = nil
+  self.labels = nil
+end
+
+function Trainer:startEpoch(n, batchSize)
+  self.epoch = n
+  self.total_samples = 0
+  self.loss_epoch = 0
+  self.top1_epoch = 0
+  self.batchNumber = 0
+  self.batchSize = batchSize
+  self.dataLoader:startEpoch(batchSize)
+  self.nBatches = self.dataLoader:nBatches()
+  self.dataTimer:reset()
+  return self.nBatches
 end
 
 
 function Trainer:train(batchSize, nEpochs)
-  self.dataTimer = torch.Timer() -- measure time to load data
-  self.timer = torch.Timer() -- measure time to complete minibatch
   nEpochs = nEpochs or 1
-  local data, labels
-  if self.is_cuda then
-    self.data = torch.CudaTensor()
-    self.labels = torch.CudaTensor()
-  end
-  local model = self.model
-  local criterion = self.criterion
   for n=1,nEpochs do
-    self.epoch = n
-    self.loss_epoch = 0.0
-    self.batchNumber = 0
-    self.dataLoader:startEpoch(batchSize)
-    self.nBatches = self.dataLoader:nBatches()
-
-    self.dataTimer:reset()
-    for i=1,self.nBatches do
+    local nBatches = self:startEpoch(n, batchSize)
+    for i=1, nBatches do
       self.pool:addjob(
         function()
           return dataLoader:getMiniBatch(i)
@@ -97,6 +102,8 @@ function Trainer:train(batchSize, nEpochs)
     end
     self.pool:synchronize()
     if self.is_cuda then cutorch.synchronize() end
+
+
     self:saveModel()
   end
 end
@@ -106,6 +113,7 @@ function Trainer:saveModel()
 end
 
 function Trainer:trainBatch(data_cpu, labels_cpu)
+  local batchSize = data_cpu:size(1)
   if self.is_cuda then cutorch.synchronize() end
   collectgarbage()
   local dataLoadingTime = self.dataTimer:time().real
@@ -138,11 +146,28 @@ function Trainer:trainBatch(data_cpu, labels_cpu)
   optim.sgd(feval, self.parameters, self.optimState)
 
   if self.is_cuda then cutorch.synchronize() end
-  self.loss_epoch = self.loss_epoch + err
   self.batchNumber = self.batchNumber + 1
+  self.loss_epoch = self.loss_epoch + err
+
+  -- top-1 error
+  local top1 = 0
+  do
+    local _,prediction_sorted = outputs:float():sort(2, true) -- descending
+    for i=1, batchSize do
+      if prediction_sorted[i][1] == labels_cpu[i] then
+        self.top1_epoch = self.top1_epoch + 1
+        self.total_samples = self.total_samples + batchSize
+        top1 = top1 + 1
+      end
+    end
+    top1 = top1 * 100 / batchSize
+  end
+
+  -- print information for this batch
   print(string.format(
-        'Epoch: [%d][%d/%d]\tTime %.3f Err %.4f DataLoadingTime %.3f',
-         self.epoch, self.batchNumber, self.nBatches, self.timer:time().real, err, dataLoadingTime))
+        'Epoch: [%d][%d/%d]\tTime %.3f Err %.4f Top1-%%: %.2f LR %.0e DataLoadingTime %.3f',
+         self.epoch, self.batchNumber, self.nBatches, self.timer:time().real, err, top1,
+         self.optimState.learningRate, dataLoadingTime))
   self.dataTimer:reset()
 end
 
