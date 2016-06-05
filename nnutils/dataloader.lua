@@ -1,5 +1,6 @@
 require 'torch'
 require 'nnutils.minibatch'
+require 'nnutils.processingchain'
 local paths = require 'paths'
 
 nnutils = nnutils or {}
@@ -8,8 +9,8 @@ nnutils = nnutils or {}
 local DataLoader = torch.class('nnutils.DataLoader')
 
 function DataLoader:__init(arg)
-  self.train_preproc = {}
-  self.test_preproc = {}
+  self.train_preproc = nnutils.ProcessingChain()
+  self.test_preproc = nil
   self.nBatches = nil
   self.batchSize = nil
   -- empty trainset
