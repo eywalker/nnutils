@@ -9,7 +9,10 @@ local function normalize(self, mean_, std_)
   -- non-corrected stdard deviation (divide by N, not N-1)
   local std = std_ or data:std(1, true)
   data:add(-mean:expandAs(data))
-  data:cdiv(std:expandAs(data))
+  local mask = std:lt(1e-12)
+  local std_adj = std:clone()
+  std_adj:maskedFill(mask,1)
+  data:cdiv(std_adj:expandAs(data))
   return mean, std
 end
 
@@ -33,12 +36,11 @@ local function cuda(self)
   require 'cutorch'
   local data_cuda = self.data:cuda()
   local labels_cuda = self.labels:cuda()
-  return MiniBatch(data_cuda, labels_cuda)
+  return nnutils.MiniBatch(data_cuda, labels_cuda)
 end
 
 
-local mt = {}
-function mt:__index(index)
+local function __index(self, index)
   local input = self.data[index]
   local label = self.labels[index]
   return {input, label}
@@ -51,14 +53,12 @@ function nnutils.MiniBatch(data, labels)
   local dataset = {}
   dataset.data = data
   dataset.labels = labels
-
   dataset.normalize = normalize
   dataset.normalizeGlobal = normalizeGlobal
   dataset.size = size
   dataset.cuda = cuda
+  dataset.__index = __index
 
-  setmetatable(dataset, mt)
+  setmetatable(dataset, dataset)
   return dataset
 end
-
-return MiniBatch
