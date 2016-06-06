@@ -98,12 +98,12 @@ end
 function DataLoader:startEpoch(batchSize, nBatches)
   batchSize = batchSize or math.min(100, self:getTrainsetSize())
   self._batchSize[1] = batchSize
-
   local fullBatches = math.ceil(self:getTrainsetSize() / self:batchSize())
   nBatches = nBatches or fullBatches
   if not self.batchWR then nBatches = math.min(nBatches, fullBatches) end
   self._nBatches[1] = nBatches
   self.epochIndicies:randperm(self:getTrainsetSize())
+  return nBatches
 end
 
 function DataLoader:getMiniBatch(batchNumber)
@@ -121,6 +121,7 @@ function DataLoader:setTestBatches(batchSize)
   self._testBatchSize[1] = batchSize
   local nBatches = math.ceil(self:getTestsetSize() / self:testBatchSize())
   self._nTestBatches[1] = nBatches
+  return nBatches
 end
 
 function DataLoader:getTestBatch(batchNumber)
