@@ -1,5 +1,6 @@
 require 'torch'
 require 'nnutils.processingchain'
+require 'nnutils.misc'
 local paths = require 'paths'
 
 nnutils = nnutils or {}
@@ -14,6 +15,8 @@ function DataLoader:__init(arg)
   self.testPC = nnutils.ProcessingChain()
   self._nBatches = torch.Tensor(1)
   self._batchSize = torch.Tensor(1)
+  self._nTestBatches = torch.Tensor(1)
+  self._testBatchSize = torch.Tensor(1)
 
   -- empty trainset
   self.trainsetData = torch.Tensor()
@@ -93,7 +96,7 @@ end
 -- Start a new epoch, resetting the batch size
 -- and total number of batches
 function DataLoader:startEpoch(batchSize, nBatches)
-  batchSize = batchSize or 100
+  batchSize = batchSize or math.min(100, self:getTrainsetSize())
   self._batchSize[1] = batchSize
 
   local fullBatches = math.ceil(self:getTrainsetSize() / self:batchSize())
@@ -111,6 +114,20 @@ function DataLoader:getMiniBatch(batchNumber)
   local stop = math.min((batchNumber) * self:batchSize(), self:getTrainsetSize())
   local batchIndicies = self.epochIndicies[{{start, stop}}]
   return self:getProcessedTrainset(batchIndicies)
+end
+
+function DataLoader:setTestBatches(batchSize)
+  batchSize = batchSize or math.min(100, self:getTestsetSize())
+  self._testBatchSize[1] = batchSize
+  local nBatches = math.ceil(self:getTestsetSize() / self:testBatchSize())
+  self._nTestBatches[1] = nBatches
+end
+
+function DataLoader:getTestBatch(batchNumber)
+  local start = (batchNumber - 1) * self:testBatchSize() + 1
+  local stop = math.min((batchNumber) * self:testBatchSize(), self:getTestsetSize())
+  local batchIndicies = torch.LongTensor():range(start, stop)
+  return self:getProcessedTestset(batchIndicies)
 end
 
 ---------------- setters and getters --------------------------
@@ -134,8 +151,16 @@ function DataLoader:batchSize()
   return self._batchSize[1]
 end
 
+function DataLoader:testBatchSize()
+  return self._testBatchSize[1]
+end
+
 function DataLoader:nBatches()
   return self._nBatches[1]
+end
+
+function DataLoader:nTestBatches()
+  return self._nTestBatches[1]
 end
 
 
