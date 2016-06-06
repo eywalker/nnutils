@@ -1,7 +1,7 @@
 package = "nnutils"
 version = "scm-1"
 source = {
-   url = "https://github.com/eywalker/nnutils"
+   url = "git://github.com/eywalker/nnutils"
 }
 description = {
    license = "MIT"
