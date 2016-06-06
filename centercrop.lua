@@ -9,8 +9,8 @@ function CenterCrop:__init(inputWidth, inputHeight, outputWidth, outputHeight)
   self.iH = inputHeight
   self.oW = outputWidth
   self.oH = outputHeight
-  self.w1 = math.ceil((self.oW - self.iW)/2)
-  self.h1 = math.ceil((self.oH - self.iH)/2)
+  self.w1 = math.ceil((self.iW - self.oW)/2)
+  self.h1 = math.ceil((self.iH - self.oH)/2)
 end
 
 function CenterCrop:updateOutput(data, labels)
