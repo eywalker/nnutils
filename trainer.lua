@@ -1,5 +1,6 @@
 require 'torch'
 require 'optim'
+require 'nnutils.misc'
 local threads = require 'threads'
 
 threads.Threads.serialization('threads.sharedserialize')
@@ -81,33 +82,47 @@ function Trainer:startEpoch(n, batchSize, nBatches)
   self.top1_epoch = 0
   self.batchNumber = 0
   self.batchSize = batchSize
-  self.dataLoader:startEpoch(batchSize, nBatches)
-  self.nBatches = self.dataLoader:nBatches()
+  self.nBatches = self.dataLoader:startEpoch(batchSize, nBatches)
   self.dataTimer:reset()
   return self.nBatches
+end
+
+function Trainer:startTest(batchSize)
+  self.total_test_samples = 0
+  self.test_loss = 0
+  self.top1_test = 0
+  self.testBatchNumber = 0
+  self.testBatchSize = batchSize
+  self.nTestBatches = self.dataLoader:setTestBatches(batchSize)
+  return self.nTestBatches
 end
 
 
 function Trainer:train(nEpochs, batchSize, nBatches)
   nEpochs = nEpochs or 1
   for n=1,nEpochs do
+    -- train
     local nBatches = self:startEpoch(n, batchSize, nBatches)
     for i=1, nBatches do
       self.pool:addjob(
-        function()
-          return dataLoader:getMiniBatch(i)
-        end,
-        function(...)
-          self:trainBatch(...)
-        end
-      )
+        function() return dataLoader:getMiniBatch(i) end,
+        function(...) self:trainBatch(...) end)
     end
     self.pool:synchronize()
-    if self.is_cuda then cutorch.synchronize() end
+    self:cudasync()
 
+    -- save model
     self:saveModel()
 
     -- test
+    local nTestBatches = self:startTest(batchSize)
+    for i=1, nTestBatches do
+      self.pool:addjob(
+        function() return dataLoader:getTestBatch(i) end,
+        function(...) self:testBatch(...) end)
+    end
+    self.pool:synchronize()
+    self:cudasync()
   end
 end
 
@@ -117,7 +132,8 @@ end
 
 function Trainer:trainBatch(data_cpu, labels_cpu)
   local batchSize = data_cpu:size(1)
-  if self.is_cuda then cutorch.synchronize() end
+
+  self:cudasync()
   collectgarbage()
   local dataLoadingTime = self.dataTimer:time().real
   self.timer:reset()
@@ -148,29 +164,62 @@ function Trainer:trainBatch(data_cpu, labels_cpu)
   -- perform single step SGD
   optim.sgd(feval, self.parameters, self.optimState)
 
-  if self.is_cuda then cutorch.synchronize() end
+  self:cudasync()
   self.batchNumber = self.batchNumber + 1
   self.loss_epoch = self.loss_epoch + err
 
+  local processingTime = self.timer:time().real
   -- top-1 error
-  local top1 = 0
-  do
-    local _,prediction_sorted = outputs:float():sort(2, true) -- descending
-    for i=1, batchSize do
-      if prediction_sorted[i][1] == labels_cpu[i] then
-        self.top1_epoch = self.top1_epoch + 1
-        self.total_samples = self.total_samples + batchSize
-        top1 = top1 + 1
-      end
-    end
-    top1 = top1 * 100 / batchSize
-  end
+  local top1 = nnutils.topkScore(outputs:float(), labels_cpu, 1)
+  self.top1_epoch = self.top1_epoch + top1
+  self.total_samples = self.total_samples + batchSize
+  top1 = top1 * 100 / batchSize
 
   -- print information for this batch
   print(string.format(
         'Epoch: [%d][%d/%d]\tTime %.3f Err %.4f Top1-%%: %.2f LR %.0e DataLoadingTime %.3f',
-         self.epoch, self.batchNumber, self.nBatches, self.timer:time().real, err, top1,
+         self.epoch, self.batchNumber, self.nBatches, processingTime, err, top1,
          self.optimState.learningRate, dataLoadingTime))
   self.dataTimer:reset()
 end
 
+function Trainer:testBatch(data_cpu, labels_cpu)
+  local batchSize = data_cpu:size(1)
+  self:cudasync()
+  collectgarbage()
+
+  local model = self.model
+  local criterion = self.criterion
+  local data = self.data
+  local labels = self.labels
+  if self.is_cuda then
+    -- transfer to GPU
+    data:resize(data_cpu:size()):copy(data_cpu)
+    labels:resize(labels_cpu:size()):copy(labels_cpu)
+  else
+    -- reference passing on CPU
+    data = data_cpu
+    labels = labels_cpu
+  end
+
+  local outputs = model:forward(data)
+  local err = criterion:forward(outputs, labels)
+  self:cudasync()
+
+  self.testBatchNumber = self.testBatchNumber + 1
+  self.test_loss = self.test_loss + err
+  local top1 = nnutils.topkScore(outputs:float(), labels_cpu, 1)
+  self.total_test_samples = self.total_test_samples + batchSize
+  self.top1_test = self.top1_test + top1
+  top1 = top1 * 100 / batchSize
+
+
+  print(string.format(
+        'Epoch: Testing [%d][%d/%d]\t Err %.4f Top1-%%: %.2f',
+         self.epoch, self.testBatchNumber, self.nTestBatches, err, top1))
+end
+
+-- synchronize cutorch only if CUDA is enabled
+function Trainer:cudasync()
+  if self.is_cuda then cutorch.synchronize() end
+end
