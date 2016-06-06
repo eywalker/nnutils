@@ -20,6 +20,8 @@ build = {
       ["nnutils.randomcrop"] = "randomcrop.lua",
       ["nnutils.centercrop"] = "centercrop.lua",
       ["nnutils.randomflip"] = "randomflip.lua",
-      ["nnutils.trainer"] = "trainer.lua"
+      ["nnutils.trainer"] = "trainer.lua",
+      ["nnutils.misc"] = "misc.lua",
+      ["nnutils.logger"] = "logger.lua",
    }
 }
