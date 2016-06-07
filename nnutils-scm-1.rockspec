@@ -22,6 +22,5 @@ build = {
       ["nnutils.randomflip"] = "randomflip.lua",
       ["nnutils.trainer"] = "trainer.lua",
       ["nnutils.misc"] = "misc.lua",
-      ["nnutils.logger"] = "logger.lua",
    }
 }
