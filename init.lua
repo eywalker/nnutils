@@ -1,5 +1,6 @@
 nnutils = nnutils or {}
-require "nnutils.dataloader"
+require "nnutils.DataLoader"
+require "nnutils.ClassDataLoader"
 require "nnutils.mnistloader"
 require "nnutils.minibatch"
 require "nnutils.processingchain"
