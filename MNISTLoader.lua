@@ -14,7 +14,7 @@ function MNISTLoader:__init(arg)
   if not paths.dirp(self.data_path) then
     assert(paths.mkdir(self.data_path), 'Failed to create directory '..self.data_path)
   end
-  self.path_remote = 'https://s3.amazonaws.com/torch7/data/mnist.t7.tgz'
+  self.path_remote = arg.path_remote or 'https://s3.amazonaws.com/torch7/data/mnist.t7.tgz'
   self.path_dataset = paths.concat(self.data_path, 'mnist.t7')
   self.path_trainset = paths.concat(self.path_dataset, 'train_32x32.t7')
   self.path_testset = paths.concat(self.path_dataset, 'test_32x32.t7')
