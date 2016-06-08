@@ -34,10 +34,6 @@ function Trainer:__init(model, criterion, dataLoader, nThreads, verbosity)
     weightDecay = 0.0
   }
 
-  -- initialize to float
-  self:float()
-  self.dataLoader:float()
-
   self.dataTimer = torch.Timer() -- measure time to load data
   self.timer = torch.Timer() -- measure time to complete minibatch
 end
@@ -86,7 +82,6 @@ function Trainer:type(typeName)
   self.tensorType = typeName
   self.model:type(typeName)
   self.criterion:type(typeName)
-  self:getParameters()
   self.useCUDA = typeName == 'torch.CudaTensor'
   if useCUDA then require 'cunn' end
   self.data = self.data:type(typeName)
@@ -110,7 +105,7 @@ end
 
 function Trainer:startTest(batchSize)
   self.total_test_samples = 0
-  self.test_loss = 0
+  self.loss_test = 0
   self.top1_test = 0
   self.testBatchNumber = 0
   self.testBatchSize = batchSize
@@ -120,10 +115,13 @@ end
 
 
 function Trainer:train(nEpochs, batchSize, nBatches)
+  self:getParameters()
   nEpochs = nEpochs or 1
+  local timer = torch.Timer()
   for n=1,nEpochs do
     -- train
     local nBatches = self:startEpoch(n, batchSize, nBatches)
+    timer:reset()
     for i=1, nBatches do
       self.pool:addjob(
         function() return _dataLoader:getMiniBatch(i) end,
@@ -132,10 +130,20 @@ function Trainer:train(nEpochs, batchSize, nBatches)
     self.pool:synchronize()
     self:cudasync()
 
+    local top1_epoch =  self.top1_epoch * 100 / self.total_samples
+    local loss_epoch =  self.loss_epoch / nBatches
+    if self.verbosity > 0 then
+      print(string.format('Epoch: [%d][TRAINING SUMMARY] Total Time(s): %.2f\t'
+                          .. 'average loss (per batch): %.2f \t '
+                          .. 'accuracy(%%):\t top-1 %.2f\t',
+                          n, timer:time().real, loss_epoch, top1_epoch))
+    end
+
     -- save model
     self:saveModel()
 
     -- test
+    timer:reset()
     local nTestBatches = self:startTest(batchSize)
     for i=1, nTestBatches do
       self.pool:addjob(
@@ -144,6 +152,15 @@ function Trainer:train(nEpochs, batchSize, nBatches)
     end
     self.pool:synchronize()
     self:cudasync()
+
+    local top1_test =  self.top1_test * 100 / self.total_test_samples
+    local loss_test =  self.loss_test / nTestBatches
+    if self.verbosity > 0 then
+      print(string.format('Epoch: [%d][TESTING SUMMARY] Total Time(s): %.2f\t'
+                          .. 'average loss (per batch): %.2f \t '
+                          .. 'accuracy(%%):\t top-1 %.2f\t',
+                          n, timer:time().real, loss_test, top1_test))
+    end
   end
 end
 
@@ -187,7 +204,7 @@ function Trainer:trainBatch(data_cpu, targets_cpu)
 
   self:cudasync()
   self.batchNumber = self.batchNumber + 1
-  self.loss_epoch = self.loss_epoch + err
+  self.loss_epoch = self.loss_epoch
 
   local processingTime = self.timer:time().real
   -- top-1 error
@@ -197,10 +214,12 @@ function Trainer:trainBatch(data_cpu, targets_cpu)
   top1 = top1 * 100 / batchSize
 
   -- print information for this batch
-  print(string.format(
-        'Epoch: [%d][%d/%d]\tTime %.3f Err %.4f Top1-%%: %.2f LR %.0e DataLoadingTime %.3f',
-         self.epoch, self.batchNumber, self.nBatches, processingTime, err, top1,
-         self.optimState.learningRate, dataLoadingTime))
+  if self.verbosity > 1 then
+    print(string.format(
+          'Epoch: [%d][%d/%d]\tTime %.3f Err %.4f Top1-%%: %.2f LR %.0e DataLoadingTime %.3f',
+           self.epoch, self.batchNumber, self.nBatches, processingTime, err, top1,
+           self.optimState.learningRate, dataLoadingTime))
+  end
   self.dataTimer:reset()
 end
 
@@ -228,15 +247,17 @@ function Trainer:testBatch(data_cpu, targets_cpu)
   self:cudasync()
 
   self.testBatchNumber = self.testBatchNumber + 1
-  self.test_loss = self.test_loss + err
+  self.loss_test = self.loss_test + err
   local top1 = nnutils.topkScore(outputs:float(), targets_cpu, 1)
   self.total_test_samples = self.total_test_samples + batchSize
   self.top1_test = self.top1_test + top1
   top1 = top1 * 100 / batchSize
 
-  print(string.format(
-        'Epoch: Testing [%d][%d/%d]\t Err %.4f Top1-%%: %.2f',
-         self.epoch, self.testBatchNumber, self.nTestBatches, err, top1))
+  if self.verbosity > 1 then
+    print(string.format(
+          'Epoch: Testing [%d][%d/%d]\t Err %.4f Top1-%%: %.2f',
+           self.epoch, self.testBatchNumber, self.nTestBatches, err, top1))
+  end
 end
 
 -- synchronize cutorch only if CUDA is enabled
