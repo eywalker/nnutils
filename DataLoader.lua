@@ -50,6 +50,7 @@ function DataLoader:setTestset(testsetData, testsetLabels)
   self:setTestsetSize(testsetData:size(1))
 end
 
+--------------------- methods to be overloaded by subclasses -------------------
 function DataLoader:getTrainset(indicies)
   local data, labels
   if not indicies then
@@ -72,6 +73,20 @@ function DataLoader:getTestset(indicies)
     labels = self.testsetLabels:index(1, indicies)
   end
   return data, labels
+end
+
+function DataLoader:type(typeName)
+  self.trainsetData = self.trainsetData:type(typeName)
+  self.testsetData = self.testsetData:type(typeName)
+end
+----------------- end of methods to be overloaded by subclasses ----------------
+
+function DataLoader:cuda()
+  self:type('torch.CudaTensor')
+end
+
+function DataLoader:float()
+  self:type('torch.FloatTensor')
 end
 
 function DataLoader:getProcessedTrainset(indicies)
@@ -163,5 +178,3 @@ end
 function DataLoader:nTestBatches()
   return self._nTestBatches[1]
 end
-
-
