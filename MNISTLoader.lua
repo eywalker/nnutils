@@ -3,7 +3,7 @@ require 'nnutils.DataLoader'
 require 'nnutils.onehot'
 local paths = require 'paths'
 
-local MNISTLoader, parent = torch.class('nnutils.MNISTLoader', 'nnutils.DataLoader')
+local MNISTLoader, parent = torch.class('nnutils.MNISTLoader', 'nnutils.ClassDataLoader')
 
 function MNISTLoader:__init(arg)
   arg = arg or {}
