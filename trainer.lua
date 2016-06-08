@@ -1,6 +1,7 @@
 require 'torch'
 require 'optim'
 require 'nnutils.misc'
+local argcheck = require 'argcheck'
 local threads = require 'threads'
 
 threads.Threads.serialization('threads.sharedserialize')
@@ -9,15 +10,21 @@ nnutils = nnutils or {}
 
 local Trainer = torch.class('nnutils.Trainer')
 
-function Trainer:__init(model, criterion, dataLoader, nMinions)
+
+function Trainer:__init(model, criterion, dataLoader, nThreads, verbosity)
   self.dataLoader = dataLoader
-  self.nMinions = nMinions or 10
+  self.nThreads = nThreads or 1
   self:setupPool()
+
+  self.verbosity = verbosity or 2  -- defalut to maximum verbosity
 
   self.model = model
   self.parameters = nil
   self.gradParameters = nil
   self.criterion = criterion
+
+  self.data = torch.Tensor()
+  self.targets = torch.Tensor()
 
   self.optimState = {
     learningRate = 0.01,
@@ -29,22 +36,36 @@ function Trainer:__init(model, criterion, dataLoader, nMinions)
 
   -- initialize to float
   self:float()
+  self.dataLoader:float()
 
   self.dataTimer = torch.Timer() -- measure time to load data
   self.timer = torch.Timer() -- measure time to complete minibatch
 end
 
+
+-- Configure the threadpool and initialize them. If nThreads == 1, then
+-- it skips setting up the pool and sets global variable instead. This
+-- is useful for debugging purpose but generally not recommended.
 function Trainer:setupPool()
-  self.pool = threads.Threads(
-    self.nMinions,
-    function()
-      require 'nnutils'
-    end,
-    function(threadid)
-      dataLoader = self.dataLoader
-      print(string.format('Starting minion with id; %d', threadid))
-    end
-  )
+  if self.nThreads > 1 then
+    self.pool = threads.Threads(
+      self.nThreads,
+      function()
+        require 'nnutils'
+      end,
+      function(threadid)
+        _dataLoader = self.dataLoader
+        print(string.format('Starting minion with id; %d', threadid))
+      end
+    )
+  else
+    -- grudgingly add global variable
+    _dataLoader = self.dataLoader
+    local pool = {}
+    function pool:addjob(f1, f2) f2(f1()) end
+    function pool:synchronize() end
+    self.pool = pool
+  end
 end
 
 function Trainer:getParameters()
@@ -54,24 +75,24 @@ function Trainer:getParameters()
 end
 
 function Trainer:cuda()
-  require 'cutorch'
-  require 'cunn'
-  self.model:cuda()
-  self.criterion:cuda()
-  self:getParameters()
-  self.is_cuda = true
-  self.data = torch.CudaTensor()
-  self.labels = torch.CudaTensor()
+  self:type('torch.CudaTensor')
 end
 
 function Trainer:float()
-  self.model:float()
-  self.criterion:float()
-  self:getParameters()
-  self.is_cuda = false
-  self.data = nil
-  self.labels = nil
+  self:type('torch.FloatTensor')
 end
+
+function Trainer:type(typeName)
+  self.tensorType = typeName
+  self.model:type(typeName)
+  self.criterion:type(typeName)
+  self:getParameters()
+  self.useCUDA = typeName == 'torch.CudaTensor'
+  if useCUDA then require 'cunn' end
+  self.data = self.data:type(typeName)
+  self.targets = self.targets:type(typeName)
+end
+
 
 -- initialize member properties at the beginning
 -- of a training epoch
@@ -105,7 +126,7 @@ function Trainer:train(nEpochs, batchSize, nBatches)
     local nBatches = self:startEpoch(n, batchSize, nBatches)
     for i=1, nBatches do
       self.pool:addjob(
-        function() return dataLoader:getMiniBatch(i) end,
+        function() return _dataLoader:getMiniBatch(i) end,
         function(...) self:trainBatch(...) end)
     end
     self.pool:synchronize()
@@ -118,7 +139,7 @@ function Trainer:train(nEpochs, batchSize, nBatches)
     local nTestBatches = self:startTest(batchSize)
     for i=1, nTestBatches do
       self.pool:addjob(
-        function() return dataLoader:getTestBatch(i) end,
+        function() return _dataLoader:getTestBatch(i) end,
         function(...) self:testBatch(...) end)
     end
     self.pool:synchronize()
@@ -130,7 +151,7 @@ function Trainer:saveModel()
   -- stub method: save model to disk
 end
 
-function Trainer:trainBatch(data_cpu, labels_cpu)
+function Trainer:trainBatch(data_cpu, targets_cpu)
   local batchSize = data_cpu:size(1)
 
   self:cudasync()
@@ -141,23 +162,23 @@ function Trainer:trainBatch(data_cpu, labels_cpu)
   local model = self.model
   local criterion = self.criterion
   local data = self.data
-  local labels = self.labels
-  if self.is_cuda then
+  local targets = self.targets
+  if self.useCUDA then
     -- transfer to GPU
     data:resize(data_cpu:size()):copy(data_cpu)
-    labels:resize(labels_cpu:size()):copy(labels_cpu)
+    targets:resize(targets_cpu:size()):copy(targets_cpu)
   else
     -- reference passing on CPU
-    data = data_cpu
-    labels = labels_cpu
+    data = data_cpu:type(self.tensorType)
+    targets = targets_cpu:type(self.tensorType)
   end
 
   local err, outputs
   feval = function(x)
     model:zeroGradParameters()
     outputs = model:forward(data)
-    err = criterion:forward(outputs, labels)
-    local gradOutputs = criterion:backward(outputs, labels)
+    err = criterion:forward(outputs, targets)
+    local gradOutputs = criterion:backward(outputs, targets)
     model:backward(data, gradOutputs)
     return err, self.gradParameters
   end
@@ -170,7 +191,7 @@ function Trainer:trainBatch(data_cpu, labels_cpu)
 
   local processingTime = self.timer:time().real
   -- top-1 error
-  local top1 = nnutils.topkScore(outputs:float(), labels_cpu, 1)
+  local top1 = nnutils.topkScore(outputs:float(), targets_cpu, 1)
   self.top1_epoch = self.top1_epoch + top1
   self.total_samples = self.total_samples + batchSize
   top1 = top1 * 100 / batchSize
@@ -183,7 +204,7 @@ function Trainer:trainBatch(data_cpu, labels_cpu)
   self.dataTimer:reset()
 end
 
-function Trainer:testBatch(data_cpu, labels_cpu)
+function Trainer:testBatch(data_cpu, targets_cpu)
   local batchSize = data_cpu:size(1)
   self:cudasync()
   collectgarbage()
@@ -191,28 +212,27 @@ function Trainer:testBatch(data_cpu, labels_cpu)
   local model = self.model
   local criterion = self.criterion
   local data = self.data
-  local labels = self.labels
-  if self.is_cuda then
+  local targets = self.targets
+  if self.useCUDA then
     -- transfer to GPU
     data:resize(data_cpu:size()):copy(data_cpu)
-    labels:resize(labels_cpu:size()):copy(labels_cpu)
+    targets:resize(targets_cpu:size()):copy(targets_cpu)
   else
     -- reference passing on CPU
-    data = data_cpu
-    labels = labels_cpu
+    data = data_cpu:type(self.tensorType)
+    targets = targets_cpu:type(self.tensorType)
   end
 
   local outputs = model:forward(data)
-  local err = criterion:forward(outputs, labels)
+  local err = criterion:forward(outputs, targets)
   self:cudasync()
 
   self.testBatchNumber = self.testBatchNumber + 1
   self.test_loss = self.test_loss + err
-  local top1 = nnutils.topkScore(outputs:float(), labels_cpu, 1)
+  local top1 = nnutils.topkScore(outputs:float(), targets_cpu, 1)
   self.total_test_samples = self.total_test_samples + batchSize
   self.top1_test = self.top1_test + top1
   top1 = top1 * 100 / batchSize
-
 
   print(string.format(
         'Epoch: Testing [%d][%d/%d]\t Err %.4f Top1-%%: %.2f',
@@ -221,5 +241,5 @@ end
 
 -- synchronize cutorch only if CUDA is enabled
 function Trainer:cudasync()
-  if self.is_cuda then cutorch.synchronize() end
+  if self.useCUDA then cutorch.synchronize() end
 end
