@@ -1,5 +1,5 @@
 --require 'nnutils.dataloader'
-require 'nnutils.dataloader'
+require 'nnutils.DataLoader'
 require 'nnutils.onehot'
 local paths = require 'paths'
 
