@@ -2,6 +2,7 @@ nnutils = nnutils or {}
 require "nnutils.DataLoader"
 require "nnutils.ClassDataLoader"
 require "nnutils.MNISTLoader"
+require "nnutils.CIFAR10Loader"
 require "nnutils.SwitchableContainer"
 require "nnutils.StudentTeacher"
 require "nnutils.minibatch"

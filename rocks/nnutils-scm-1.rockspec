@@ -15,6 +15,7 @@ build = {
       ["nnutils.ClassDataLoader"] = "ClassDataLoader.lua",
       ["nnutils.minibatch"] = "minibatch.lua",
       ["nnutils.MNISTLoader"] = "MNISTLoader.lua",
+      ["nnutils.CIFAR10Loader"] = "CIFAR10Loader.lua",
       ["nnutils.SwitchableContainer"] = "SwitchableContainer.lua",
       ["nnutils.StudentTeacher"] = "StudentTeacher.lua",
       ["nnutils.onehot"] = "onehot.lua",
