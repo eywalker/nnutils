@@ -7,8 +7,23 @@ function SwitchableContainer:__init(trainable)
   self.trainable = trainable
 end
 
+
 function SwitchableContainer:accGradParameters(...)
   if self.trainable then
     parent.accGradParameters(self, ...)
+  end
+end
+
+function SwitchableContainer:backward(...)
+  if self.trainable then
+    return parent.backward(self, ...)
+  else
+    return self:updateGradInput(...)
+  end
+end
+
+function SwitchableContainer:accUpdateGradParameters(...)
+  if self.trainable then
+    parent.accUpdateGradParameters(self, ...)
   end
 end

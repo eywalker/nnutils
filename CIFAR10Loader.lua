@@ -63,5 +63,8 @@ function CIFAR10Loader:loadDataset(fileName, nFiles)
    labels = nnutils.onehot(labels, 10)
   end
 
+  data = data:type(torch.getdefaulttensortype())
+  labels = labels:type(torch.getdefaulttensortype())
+
   return data, labels
 end
