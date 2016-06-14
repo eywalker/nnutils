@@ -26,6 +26,7 @@ build = {
       ["nnutils.randomflip"] = "randomflip.lua",
       ["nnutils.Trainer"] = "Trainer.lua",
       ["nnutils.FFCriterion"] = "FFCriterion.lua",
+      ["nnutils.PairwiseMSE"] = "PairwiseMSE.lua",
       ["nnutils.misc"] = "misc.lua",
    }
 }
