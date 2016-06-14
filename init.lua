@@ -12,5 +12,6 @@ require "nnutils.randomflip"
 require "nnutils.randomcrop"
 require "nnutils.centercrop"
 require "nnutils.trainer"
+require 'nnutils.FFCriterion'
 
 
