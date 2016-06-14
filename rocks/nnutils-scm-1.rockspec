@@ -25,6 +25,7 @@ build = {
       ["nnutils.centercrop"] = "centercrop.lua",
       ["nnutils.randomflip"] = "randomflip.lua",
       ["nnutils.Trainer"] = "Trainer.lua",
+      ["nnutils.FFCriterion"] = "FFCriterion.lua",
       ["nnutils.misc"] = "misc.lua",
    }
 }
