@@ -11,4 +11,5 @@ function nnutils.Fix(module)
   module.fixed = true
   module:zeroGradParameters()
   module.accGradParameters = function() end
+  return module
 end
