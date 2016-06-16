@@ -21,6 +21,7 @@ build = {
       ["nnutils.onehot"] = "onehot.lua",
       ["nnutils.processingchain"] = "processingchain.lua",
       ["nnutils.processor"] = "processor.lua",
+      ["nnutils.Fix"] = "Fix.lua",
       ["nnutils.randomcrop"] = "randomcrop.lua",
       ["nnutils.centercrop"] = "centercrop.lua",
       ["nnutils.randomflip"] = "randomflip.lua",

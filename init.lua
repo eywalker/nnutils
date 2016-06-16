@@ -14,5 +14,6 @@ require "nnutils.centercrop"
 require "nnutils.Trainer"
 require "nnutils.FFCriterion"
 require "nnutils.PairwiseMSE"
+require "nnutils.Fix"
 
 
